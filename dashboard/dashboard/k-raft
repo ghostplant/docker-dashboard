@@ -1,0 +1,57 @@
+#!/bin/sh -e
+
+while true; do
+	NODES=$(docker node ls 2>/dev/null | grep -v ^ID\ ) || true
+	LEADER=$(echo "$NODES" | grep \* | grep \ Leader) || true
+	if [ "$LEADER" != "" ]; then
+		OPS=$(echo "$NODES" | tr \* \  | awk "
+			BEGIN {
+				manager_ready = 0
+				manager_down = 0
+				worker_ready = 0
+			} {
+				isManager = (\$5 != \"\")
+				isAvailable = (\$3 == \"Ready\")
+				if (isManager) {
+					if (isAvailable)
+						++manager_ready
+					else {
+						++manager_down
+						manager_arr[\$1] = 1
+					}
+				} else if (isAvailable) {
+					++worker_ready
+					worker_arr[\$1] = 1
+				}
+			} END {
+				if (manager_ready <= manager_down)
+					print \"# Pool Availability ..\"
+				else {
+					total_ready = manager_ready + worker_ready
+					if (total_ready <= 11)
+						k = 3
+					else if (total_ready <= 21)
+						k = 5
+					else if (total_ready <= 35)
+						k = 7
+					else
+						k = 9
+					for (node in manager_arr)
+						print \"docker node demote\", node
+					for (node in worker_arr)
+						if (manager_ready >= k)
+							break
+						else {
+							++manager_ready
+							print \"docker node promote\", node
+						}
+					
+				}
+			}
+		" 2>/dev/null)
+		if ! echo "${OPS}" | grep ^#\  >/dev/null; then
+			sh -cx "${OPS}" || true
+		fi
+	fi
+	sleep 3
+done

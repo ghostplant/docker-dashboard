@@ -1,0 +1,597 @@
+<html>
+
+<link rel="stylesheet" href="bootstrap.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="bootstrap-theme.min.css" crossorigin="anonymous">
+<script src="jquery-3.1.1.min.js"></script>
+<script src="bootstrap.min.js" crossorigin="anonymous"></script>
+
+<!--
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp" crossorigin="anonymous">
+<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+-->
+
+<script>
+
+	function messagebox(msg, title, callback) {
+		$('#confirm_title').html(title);
+		$('#confirm_message').html(msg);
+		$('#confirm_cancel').css('display', 'none');
+		$('#confirm_okay').off('click').click(callback);
+		$("#confirmModal").modal('show');
+	}
+
+	function confirmbox(msg, callback) {
+		$('#confirm_title').html('Confirmation');
+		$('#confirm_message').html(msg);
+		$('#confirm_cancel').css('display', '');
+		$('#confirm_okay').off('click').click(callback);
+		$("#confirmModal").modal('show');
+	}
+
+	function inputbox(msg, title, text, ph, callback) {
+		$('#input_title').html(title);
+		$('#input_message').html(msg);
+		$('#input_text').val(text).attr('placeholder', ph);
+		$('#input_next').off('click').click(function() {
+			callback($('#input_text').val());
+		});
+		$("#inputModal").on('shown.bs.modal', function(e) {
+			$("#input_text").focus();
+		}).modal('show');
+	}
+
+	function request(key, callback, method, text) {
+		var req = new XMLHttpRequest();
+		req.onreadystatechange = function () {
+			if (req.readyState != 4)
+				return;
+			callback(req.responseText);
+		};
+		if (method == null)
+			method = 'GET';
+		if (key[0] == '/')
+			key = '/v1.12' + key;
+		else
+			key = '/' + key;
+		req.open(method, key);
+		if (method == 'POST') {
+			req.setRequestHeader('Content-Type', 'application/json');
+			if (text == null)
+				text = '{}';
+		}
+		req.send(text);
+	}
+	
+	function update_role(nodeId, role, callback) {
+		var except = function(err) {
+			setTimeout(function() {
+				messagebox('Update role failed: ' + err, 'Error');
+			}, 1000);
+		};
+		request('/nodes/' + nodeId, function(node_data) {
+			try {
+				var obj = JSON.parse(node_data);
+				if (obj.Version == null || obj.Version.Index == null)
+					throw "Cannot get version tag.";
+				request('/nodes/' + nodeId + '/update?version=' + obj.Version.Index, callback || function(role_data) {
+					if (role_data == '')
+						return messagebox('Successfully updated node to ' + role + '!', 'Infomation', function() { machine_update(); });
+					else
+						except(role_data);
+				}, 'POST', JSON.stringify({
+					"Availability":"active",
+					"Role":role
+				}));
+			} catch (err) {
+				if (callback)
+					callback('');
+				except(err);
+			}
+		});
+	}
+
+	function machine_leave(data) {
+		if (data == null) {
+			var nodeId = $('#swarm_node').html();
+			if (nodeId == '')
+				return messagebox("Already removed from any swarm clusters.", "Infomation");
+			return confirmbox("This node will be released from global machines, which is unrecovery-able!<br/><br/>Are you sure to continue?", function() {
+				if ('worker' == $('#swarm_role').html())
+					return request('/swarm/leave?force=1', machine_leave, 'POST');
+				update_role(nodeId, 'worker', function(demote_data) {
+					if (demote_data != '' && demote_data.indexOf('to demote the last manager') < 0)
+						return messagebox('Leaving failed: ' + demote_data, 'Error');
+					request('/swarm/leave?force=1', machine_leave, 'POST');
+				});
+			});
+		}
+		setTimeout(function() {
+			if (data != '')
+				return messagebox('Failed: ' + data, "Error");
+		
+			messagebox("Done. We are going to refresh this page!", 'Information', function() {
+				window.location.href = '/';
+			});
+		}, 1000);
+	}
+
+	function node_clean(data, id) {
+		if (data == null) {
+			return confirmbox("Are you sure to clean this node?", function() {
+				request('/nodes/' + id, function(node_clean) {
+					if (node_clean == '')
+						machine_update();
+					else
+						return messagebox('Failed: ' + node_clean, "Error");
+				}, 'DELETE');
+			});
+		}
+	}
+
+	function node_demote(data, id) {
+		if (data == null) {
+			return confirmbox("Are you sure to demote this node?", function() {
+				update_role(id, 'worker');
+			});
+		}
+	}
+
+	function node_promote(data, id) {
+		if (data == null) {
+			return confirmbox("Are you sure to promote this node?", function() {
+				update_role(id, 'manager');
+			});
+		}
+	}
+
+	
+	function machine_update(data) {
+		if (data == null) {
+			$('#machine_refresh').attr('disabled', true);
+			$('#machine_tokens').attr('disabled', true);
+			$('#machine_table').fadeOut();
+			return request('/nodes', machine_update);
+		}
+		var obj = JSON.parse(data);
+		if (obj.message != null)
+			return window.location.href = '/';
+		
+		$('#machine_title').html('<th>ID</th><th>Hostname</th><th>NanoCPUs</th><th>MemoryBytes</th><th>Status</th><th>Role</th><th>Control</th>');
+
+		var managers = '', workers = '';
+		for (var i = 0; i < obj.length; ++i) {
+			var table = '<tr>';
+			if ($('#swarm_node').html() == obj[i].ID)
+				table += '<td><strong>' + obj[i].ID + '</strong></td>';
+			else
+				table += '<td>' + obj[i].ID + '</td>';
+			table += '<td>' + obj[i].Description.Hostname + '</td>';
+			table += '<td>' + obj[i].Description.Resources.NanoCPUs + '</td>';
+			table += '<td>' + obj[i].Description.Resources.MemoryBytes + '</td>';
+			table += '<td>' + obj[i].Status.State + '</td>';
+			if (obj[i].ManagerStatus) {
+				var role = obj[i].Spec.Role + ' (';
+				if (obj[i].ManagerStatus.Leader)
+					role += 'leader, ';
+				role += obj[i].ManagerStatus.Reachability + ')';
+				table += '<td>' + role + '</td>';
+				table += '<td><button type="button" class="btn btn-sm btn-primary" style="width: 100px" onclick="node_demote(null, \'' + obj[i].ID + '\')">DEMOTE</button></td>';
+			} else {
+				table += '<td>' + obj[i].Spec.Role + '</td>';
+				if (obj[i].Status.State == 'ready')
+					table += '<td><button type="button" class="btn btn-sm btn-default" style="width: 100px" onclick="node_promote(null, \'' + obj[i].ID + '\')">PROMOTE</button></td>';
+				else
+					table += '<td><button type="button" class="btn btn-sm btn-default" style="width: 100px" onclick="node_clean(null, \'' + obj[i].ID + '\')">DELETE</button></td>';
+			}
+			table += '</tr>';
+			if (obj[i].ManagerStatus)
+				managers += table;
+			else
+				workers += table;
+		}
+		$('#machine_body').html(managers + workers);
+		$('#machine_tokens').attr('disabled', false);
+		$('#machine_refresh').attr('disabled', false);
+		$('#machine_table').fadeIn();
+	}
+
+	function service_scale(id, data) {
+		if (id != null) {
+			if (id != '')
+				return messagebox('Scaling/Removing Failed: ' + id, 'Error');
+			return service_update();
+		}
+		
+		inputbox("Please input the number you want to scale or remove:", "Service Scaling", "", "For example: 0, 1, 2, .. (-1 for removing)", function(num) {
+			try {
+				num = parseInt(num);
+				if (isNaN(num))
+					throw "Illegal scaling number.";
+			} catch (err) {
+				return messagebox('Scaling Failed: ' + err, 'Error');
+			}
+			if (num < 0) {
+				return confirmbox("Service removal is un-recoverable. Are you sure to remove '" + data + "'?", function() {
+					request('/services/' + data, service_scale, 'DELETE');
+				});
+			}
+			request('/services/' + data, function(service_data) {
+				try {
+					var obj = JSON.parse(service_data);
+					if (obj.Version == null || obj.Version.Index == null)
+						throw "Cannot get version tag.";
+					obj.Spec.Mode.Replicated.Replicas = num;
+					request('/services/' + data + '/update?version=' + obj.Version.Index, service_scale, 'POST', JSON.stringify(obj.Spec));
+				} catch (err) {
+					return messagebox('Scaling Failed: ' + err, 'Error');
+				}
+			});
+		});
+	}
+
+	function service_update(data) {
+		if (data == null) {
+			$('#service_refresh').attr('disabled', true);
+			$('#service_pre_create').attr('disabled', true);
+			$('#service_table').fadeOut();
+			return request('/services', function(service_data) {
+				request('/tasks', function(task_data) {
+					service_update(JSON.stringify({
+						services: JSON.parse(service_data),
+						tasks: JSON.parse(task_data)
+					}));
+				});
+			});
+		}
+		var obj = JSON.parse(data);
+		
+		var running = [];
+		for (var i = 0; i < obj.tasks.length; ++i) {
+			if (obj.tasks[i].Status.State != "running")
+				continue;
+			if (running[obj.tasks[i].ServiceID] == null)
+				running[obj.tasks[i].ServiceID] = 1;
+			else
+				++running[obj.tasks[i].ServiceID];
+		}
+
+		$('#service_title').html('<th>ID</th><th>Image</th><th>Replicas</th><th>Publication</th>');
+		var table = '';
+		for (var i = 0; i < obj.services.length; ++i) {
+			table += '<tr>';
+			table += '<td>' + obj.services[i].ID + ' (' + obj.services[i].Spec.Name + ')</td>';
+			table += '<td>' + obj.services[i].Spec.TaskTemplate.ContainerSpec.Image + '</td>';
+			if (running[obj.services[i].ID] == null)
+				running[obj.services[i].ID] = 0;
+
+			table += '<td><button class="btn btn-sm btn-default" onclick="service_scale(null, \'' + obj.services[i].ID + '\')">' + running[obj.services[i].ID] + '/' + obj.services[i].Spec.Mode.Replicated.Replicas + '</button></td>';
+
+			var ports = '';
+			for (var j = 0; j < obj.services[i].Endpoint.Ports.length; ++j) {
+				if (j > 0)
+					ports += '<br/>';
+				ports += obj.services[i].Endpoint.Ports[j].PublishedPort + ':' + obj.services[i].Endpoint.Ports[j].TargetPort + '/' + obj.services[i].Endpoint.Ports[j].Protocol;
+				ports += ' <a href="http://' + window.location.hostname + ":" + obj.services[i].Endpoint.Ports[j].PublishedPort + '" target="_blank">http</a>';
+			}
+			table += '<td>' + ports + '</td>';
+			table += '</tr>';
+		}
+		$('#service_body').html(table);
+
+		$('#service_refresh').attr('disabled', false);
+		$('#service_pre_create').attr('disabled', false);
+		$('#service_table').fadeIn();
+	}
+	
+	// curl -m 2 -s --unix-socket /var/run/docker.sock http:/info
+	// curl -m 2 -s --unix-socket /var/run/docker.sock -H 'Content-Type: application/json' -X POST -d '' http:..
+
+	function swarm_join(data, token) {
+		if (data == null) {
+			return request('backports/ipaddress', function(ipaddress) {
+				ipaddress = ipaddress.split('\n')[0];
+				request('/swarm/leave?force=1', function(data) {
+					if (token == 'init') {
+						request('/swarm/init', swarm_join, 'POST', JSON.stringify({
+							ListenAddr: "0.0.0.0:2377",
+							AdvertiseAddr: ipaddress + ":2377"
+						}));
+					} else {
+						var parts = token.split('@', 2);
+						request('/swarm/join', swarm_join, 'POST', JSON.stringify({
+							ListenAddr: "0.0.0.0:2377",
+							AdvertiseAddr: ipaddress + ":2377",
+							JoinToken: parts[1],
+							RemoteAddrs: [parts[0]]
+						}));
+					}
+				}, 'POST');
+			});
+		}
+		if (data.indexOf(' ') >= 0)
+			return messagebox(data, 'Error');
+
+		messagebox('Succeeded creating/joining into a swarm cluster.', 'Infomation', function() {
+			initialize();
+		});
+	}
+
+	function system_info(data) {
+		if (data == null) {
+			return request('/version', function(version_data) {
+				var version = JSON.parse(version_data).Version;
+				var parts = version.split('.');
+				if (parts[0] < '1' || (parts[0] == '1' && parts[1] < '12'))
+					return  messagebox('Current docker version is ' + version + ' which is unsupported.<br/><br/>Please install Docker (>=1.12).');
+				system_info('next=>');
+			});
+		} else if (data == 'next=>') {
+			return request('/info', function(info_data) {
+				request('/swarm', function(swarm_data) {
+					try {
+						swarm_obj = JSON.parse(swarm_data);
+					} catch (e) {
+						swarm_obj = {
+							message: swarm_data
+						};
+					}
+					system_info(JSON.stringify({
+						info: JSON.parse(info_data),
+						swarm: swarm_obj
+					}));
+				});
+			});
+		}
+		var obj = JSON.parse(data);
+		if (obj.swarm.message != null) {
+			if (obj.swarm.message.indexOf('docker swarm init') >= 0) {
+				return inputbox("This machine doesn't belong to any cluster. <br/><strong>Please input a token to join into an existing cluster:</strong><br/>Note: leave it blank if you want to create a new independent cluster.", "Swarm Cluster Initialzation", "", "For example: 1.2.3.4:2377|1.2.3.5:2377|1.2.3.6:2377@SWMTKN-1-XXXXXXXX", function(result) {
+					if (result == '')
+						return confirmbox("You didn't input anything. Do you want to create a new cluster?", function() {
+							return swarm_join(null, 'init');
+						});
+					return swarm_join(null, result);
+				});
+			}
+			$('#swarm_node').html(obj.info.Swarm.NodeID);
+			$('#swarm_role').html('worker');
+			return messagebox(obj.swarm.message + '<br/><br/>But you can still "Leave from Swarm".', "Infomation from Swarm");
+		}
+		var nid = obj.info.Swarm.NodeID;
+		var naddr = null;
+		var managers = obj.info.Swarm.RemoteManagers;
+		for (var i = 0; i < managers.length; ++i)
+			if (managers[i].NodeID == nid) {
+				naddr = managers[i].Addr;
+				break;
+			}
+		var token_manager = obj.swarm.JoinTokens.Manager;
+		var token_worker = obj.swarm.JoinTokens.Worker;
+		
+		$('#swarm_token').html('<p><strong>Join as Manager:</strong> ' + naddr + '@' + token_manager + '</p><p><strong>Join as Worker:</strong> ' + naddr + '@' + token_worker + '</p>');
+		$('#swarm_node').html(obj.info.Swarm.NodeID);
+		$('#swarm_role').html('manager');
+
+		machine_update();
+		service_update();
+	}
+
+	function service_create(data, pre) {
+		if (pre != null) {
+			$("#createModal").on('shown.bs.modal', function(e) {
+				$("#compose_yaml").focus();
+			});
+			return $("#createModal").modal('show');
+		}
+		if (data == null) {
+			var obj = {}, ports = [];
+			try {
+				obj = JSON.parse($('#compose_yaml').val());
+				if (obj.expose) {
+					for (var i = 0; i < obj.expose.length; ++i) {
+						var parts = obj.expose[i].split('/', 2);
+						var mapping = parts[1].split(':', 2);
+						ports.push({
+							"Protocol": parts[0],
+							"PublishedPort": parseInt(mapping[0]),
+							"TargetPort": parseInt(mapping[1])
+						});
+					}
+				}
+				if (obj.replicas == null)
+					obj.replicas = 1;
+				if (obj.image == null)
+					throw "No image template specified!";
+			} catch (err) {
+				return messagebox('Failed parsing create JSON text:<br/><br/>' + err, 'Error');
+			}
+			
+			return request('/services/create', function(data) {
+				service_create(data);
+			}, 'POST', JSON.stringify({
+				"Name": obj.name,
+				"EndpointSpec":{
+					"Ports": ports
+				},"Mode":{
+					"Replicated":{
+					}
+				},"TaskTemplate":{
+					"ContainerSpec":{
+						"Image":obj.image
+					},"Placement":{
+					},"Resources":{
+						"Limits":{
+						},"Reservations":{
+						}
+					},"RestartPolicy":{
+					}
+				},"UpdateConfig":{
+					"FailureAction":"pause",
+					"Parallelism":1
+				}
+			}));
+		}
+		
+		try {
+			JSON.parse(data);
+		} catch (e) {
+			return messagebox('Failed to create service:<br/><br/>' + data, 'Error');
+		}
+		
+		messagebox('Service successfully created: ' + data, 'Infomation', function() {
+			service_update();
+		});
+	}
+
+	function report_token() {
+		var token = $('#swarm_token').html();
+		if (token == null || token == '')
+			return messagebox('No Swarm Token found!', 'Error');
+		messagebox(token, 'Swarm Token');
+	}
+
+	function initialize() {
+		system_info();
+		$('#compose_yaml').val('{"image": "ghostplant/http-checker:latest", "expose": ["tcp/10001:80"]}');
+	}
+</script>
+
+<body onload="initialize()" style="margin-left: 10px; margin-right: 10px">
+
+    <nav class="navbar navbar-inverse navbar-fixed-top">
+      <div class="container">
+        <div class="navbar-header">
+          <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar" aria-expanded="false" aria-controls="navbar">
+            <span class="sr-only">Toggle navigation</span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="navbar-brand" href="#">Dashboard (v0.1) for Docker Swarm v1.12+</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+          <ul class="nav navbar-nav">
+            <li class="active"><a href="/">Home</a></li>
+            <li><a href="#" onclick="machine_leave()">Leave from Swarm</a></li>
+            <li><a href="#" onclick="messagebox('<strong>Auther:</strong> CUI Wei &lt;<span>ghostplant@qq.com</span>&gt;', 'About Swarm Dashborad')">About</a></li>
+          </ul>
+        </div><!--/.nav-collapse -->
+      </div>
+    </nav>
+	<div style="margin-top: 70px"></div>
+	<div class="alert alert-info" role="alert" id="msg_box"><strong>Successully logged in!</strong></div>
+	<div class="panel panel-success">
+		<div class="panel-heading">
+			<h3 class="panel-title"><strong>Global Machines</strong>
+				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="machine_update()" id="machine_refresh" disabled="true">Refresh</button>
+				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="report_token()" id="machine_tokens" disabled="true">Swarm Token</button>
+			</h3>
+		</div>
+		<div class="panel-body">
+	          <div class="col-md">
+	            <table class="table" id="machine_table" style="margin-top: 10px; display:none">
+	              <thead>
+	                <tr id="machine_title">
+	                </tr>
+	              </thead>
+	              <tbody id="machine_body">
+ 	              </tbody>
+ 	            </table>
+ 	          </div>
+		</div>
+	</div>
+	<div class="panel panel-success">
+		<div class="panel-heading">
+			<h3 class="panel-title"><strong>Global Services</strong>
+				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="service_update()" id="service_refresh" disabled="true">Refresh</button>
+				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="service_create(null, 'pre')" id="service_pre_create" disabled="true">Create</button>
+			</h3>
+		</div>
+		<div class="panel-body">
+	          <div class="col-md">
+	            <table class="table" id="service_table" style="margin-top: 10px; display:none">
+	              <thead>
+	                <tr id="service_title">
+	                </tr>
+	              </thead>
+	              <tbody id="service_body">
+ 	              </tbody>
+ 	            </table>
+ 	          </div>
+		</div>
+		<div style="display: none" id="swarm_token"></div>
+		<div style="display: none" id="swarm_node"></div>
+		<div style="display: none" id="swarm_role"></div>
+	</div>
+
+<!-- Modal Messagbox/Confirm -->
+<div id="confirmModal" class="modal fade">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title" id="confirm_title"></h4>
+            </div>
+            <div class="modal-body">
+                <p id="confirm_message"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal" id="confirm_cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" data-dismiss="modal" id="confirm_okay">Okay</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Create -->
+<div id="createModal" class="modal fade">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title">Create a New Service</h4>
+            </div>
+            <div class="modal-body">
+                <p>
+	            <div style="margin-top: 10px">
+	               <h4><strong>New Service:</strong></h4>
+	               <textarea class="form-control" rows="10" id="compose_yaml"></textarea>
+	            </div>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-warning btn-primary" data-dismiss="modal" onclick="service_create()">Create</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Input -->
+<div id="inputModal" class="modal fade">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+                <h4 class="modal-title" id="input_title"></h4>
+            </div>
+            <div class="modal-body">
+                <p>
+	            <div style="margin-top: 10px">
+	               <h5 id="input_message" style="margin-bottom: 10px"></h5>
+	               <input id="input_text" placeholder="" class="form-control" type="text" />
+	            </div>
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" data-dismiss="modal" id="input_next">Next</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

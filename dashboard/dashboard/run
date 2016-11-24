@@ -1,0 +1,59 @@
+#!/bin/sh -e
+
+if [ -f /.dockerenv ] && [ "$INIT_ACCOUNT" = "" ]; then
+	echo ""
+	echo "Usage:"
+	echo ""
+	echo "docker run -it --rm --privileged -p 8443:443 -p 10000-10010:10000-10010 -e INIT_ACCOUNT="admin:badmin" -v /export-docker:/var/lib/docker ghostplant/docker-dashboard"
+	echo ""
+	echo "Then open https://localhost:8443/ using web browsers."
+	echo ""
+	exit 0
+fi
+
+LISTEN=${LISTEN:-443 ssl}
+INIT_ACCOUNT=${INIT_ACCOUNT:-admin:badmin}  # $(tr -cd A-z </dev/urandom | head -c 8)
+
+WORKDIR=$(dirname $0)
+cd ${WORKDIR}
+WORKDIR=$(pwd)
+mkdir -p /var/lib/docker/ssl
+cd /var/lib/docker/ssl
+
+REQ="iptables dockerd nginx nc openssl"
+if ! which ${REQ} >/dev/null && which apk >/dev/null; then
+	apk update && apk add iptables nginx && rm -rf /var/cache/apk
+fi
+
+if ! which ${REQ} >/dev/null; then
+	echo "Commands required: ${REQ}." >/dev/stderr
+	exit 1
+fi
+
+LISTEN_PORT=$(echo "${LISTEN}" | awk '{print $1}')
+if nc -w 1 0.0.0.0 ${LISTEN_PORT} >/dev/null 2>&1; then
+	echo "Port tcp/${LISTEN_PORT} has already been used." > /dev/stderr
+	exit 1
+fi
+
+if ! pgrep dockerd >/dev/null 2>&1; then
+	echo "Docker daemon not started." >/dev/stderr
+	exit 1
+fi
+
+if [ ! -e /var/lib/docker/swarm ]; then
+	echo "Docker version must be at least 1.12.x" >/dev/stderr
+	exit 1
+fi
+
+INIT_USER=$(echo ${INIT_ACCOUNT} | awk -F\: '{print $1}')
+INIT_PASS=$(echo ${INIT_ACCOUNT} | awk -F\: '{print $2}')
+
+[ ! -e ca.pem ] && openssl req -x509 -nodes -days 3650 -subj "/CN=$(hostname)/" -newkey rsa:4096 -keyout 'ca.pem' -out 'ca.pem'
+[ ! -e auth.basic ] && echo "${INIT_USER}:$(openssl passwd -crypt ${INIT_PASS})" > auth.basic && echo "Basic AUTH file not found. Automatically generating one to '$(pwd)/auth.basic':" && echo " * username = ${INIT_USER}, password = ${INIT_PASS}"
+
+awk '{ gsub(/%LISTEN%/, "'"${LISTEN}"'", $0); gsub(/%WORKDIR%/, "'"${WORKDIR}"'", $0); print $0; }' ${WORKDIR}/nginx.conf.in > /tmp/nginx.conf
+
+echo
+echo "Listening on port :${LISTEN} .."
+nginx -c /tmp/nginx.conf

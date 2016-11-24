@@ -1,0 +1,19 @@
+#!/bin/bash -e
+
+[[ "$2" != "tty1" ]] && exec agetty.real "$@"
+
+function dynamic {
+	while true; do
+		NET_INT="lo $(ls -d /sys/class/net/e* 2>/dev/null | awk -F\/ '{print $NF}')"
+		echo "You can get access to swarm dashboard via one of the following links:"
+		echo
+		for INT in ${NET_INT}; do
+			CIDR=$(ip addr show ${INT} | grep inet\  | awk '{print $2}' | awk -F\/ '{print $1}')
+			echo "  https://${CIDR}/"
+		done
+		echo
+		docker-swarm-dashboard
+	done
+}
+
+dynamic >/dev/tty1

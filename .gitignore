@@ -1,0 +1,4 @@
+ubuntu-docker/bundles
+ubuntu-docker/man
+ubuntu-docker/dockerversion/version_autogen.go
+*.deb
