@@ -4,12 +4,18 @@
 package local
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
@@ -294,8 +300,88 @@ func (v *localVolume) DriverName() string {
 
 // Path returns the data location.
 func (v *localVolume) Path() string {
+	parts := strings.SplitN(v.name, "..", 2)
+	if len(parts) == 2 {
+		dec, err := hex.DecodeString(parts[1])
+		if err != nil {
+			return ""
+		}
+		subdir := string(dec[:])
+		if strings.Contains(subdir, "..") || !strings.HasPrefix(subdir, "/") {
+			return ""
+		}
+		return v.path + subdir
+	}
 	return v.path
 }
+
+func (v *localVolume) anymount() error {
+	// * Swarm Example:
+	//
+	// docker service create --mount type=volume,volume-opt=type=@sshfs,volume-opt=o=workaround=all:o=reconnect:o=password_stdin:o=StrictHostKeyChecking=no:o=IdentityFile=/dev/null:o=port=22,volume-opt=device=admin@0.0.0.0:/tmp?stdin=badmin,source=registry-volume,target=/var/lib/registry registry
+	// docker service create --mount type=volume,volume-opt=type=@sftp/22,volume-opt=device=admin@0.0.0.0:/tmp,volume-opt=o=badmin,source=registry-volume,target=/var/lib/registry registry
+
+	if len(v.opts.MountDevice) == 0 {
+		return fmt.Errorf("missing device in volume options")
+	}
+
+	parts := strings.SplitN(v.opts.MountType[1:], ":", 2)
+	executor := parts[0]
+	if len(executor) == 0 {
+		executor = "mount"
+	}
+
+	var args = []string{}
+	if len(parts) > 1 && len(parts[1]) > 0 {
+		args = append(args, "-t", parts[1])
+	}
+
+	parts = strings.SplitN(v.opts.MountDevice, "?stdin=", 2)
+	mountStdin := ""
+	if len(parts) > 1 {
+		mountStdin = parts[1]
+	}
+	args = append(args, parts[0], v.path)
+
+	if len(v.opts.MountOpts) > 0 {
+		mountOpts := v.opts.MountOpts
+		if strings.HasPrefix(executor, "sftp/") {
+			port, err := strconv.ParseUint(executor[5:], 10, 16)
+			if err != nil {
+				return fmt.Errorf("unable to parse port value of sftp: %q", executor[5:])
+			}
+			executor = "sshfs"
+			mountStdin = mountOpts
+			mountOpts = fmt.Sprintf("port=%d:o=workaround=all:o=reconnect:o=password_stdin:o=StrictHostKeyChecking=no:o=IdentityFile=/dev/null", port)
+		}
+		opts := strings.Split(mountOpts, ":o=")
+		for _, opt := range opts {
+			args = append(args, "-o", opt)
+		}
+	}
+
+	path := v.Path()
+	if len(path) == 0 {
+		return fmt.Errorf("unable to parse volume name: %q", v.name)
+	}
+
+	cmd := exec.Command(executor, args...)
+	stdin, err := cmd.StdinPipe()
+	if err == nil {
+		if err = cmd.Start(); err == nil {
+			io.Copy(stdin, bytes.NewBufferString(mountStdin))
+			stdin.Close()
+			if err = cmd.Wait(); err == nil {
+				if err = os.MkdirAll(path, 0750); err == nil {
+					return nil
+				}
+			}
+		}
+	}
+	mount.Unmount(v.path)
+	return fmt.Errorf("failed to mount by external helper: %s %s (%s)", executor, strings.Join(args, " "), err)
+}
+
 
 // Mount implements the localVolume interface, returning the data location.
 func (v *localVolume) Mount(id string) (string, error) {
@@ -303,14 +389,20 @@ func (v *localVolume) Mount(id string) (string, error) {
 	defer v.m.Unlock()
 	if v.opts != nil {
 		if !v.active.mounted {
-			if err := v.mount(); err != nil {
-				return "", err
+			if !strings.HasPrefix(v.opts.MountType, "@") {
+				if err := v.mount(); err != nil {
+					return "", err
+				}
+			} else {
+				if err := v.anymount(); err != nil {
+					return "", err
+				}
 			}
 			v.active.mounted = true
 		}
 		v.active.count++
 	}
-	return v.path, nil
+	return v.Path(), nil
 }
 
 // Umount is for satisfying the localVolume interface and does not do anything in this driver.
