@@ -153,8 +153,10 @@ func (daemon *Daemon) createContainerPlatformSpecificSettings(container *contain
 	}
 
 	var defaultDriver = hostConfig.VolumeDriver
+	defaultConfig := false
 	if driver, ok := config.Labels["com.github.private.volume.default.driver"]; ok {
 		defaultDriver = driver
+		defaultConfig = true
 	}
 	var defaultOpts map[string]string
 	if opts, ok := config.Labels["com.github.private.volume.default.opts"]; ok {
@@ -167,6 +169,7 @@ func (daemon *Daemon) createContainerPlatformSpecificSettings(container *contain
 			}
 			defaultOpts[pair[0]] = pair[1]
 		}
+		defaultConfig = true
 	}
 
 	if disabled, ok := config.Labels["com.github.private.volume.default.disabled"]; ok && disabled == "true" {
@@ -175,10 +178,12 @@ func (daemon *Daemon) createContainerPlatformSpecificSettings(container *contain
 
 	for spec := range config.Volumes {
 		name := stringid.GenerateNonCryptoID()
-		if defaultName, ok := config.Labels["com.github.private.volume.default.name"]; ok {
-			name = defaultName
-		} else if serviceName, ok := config.Labels["com.docker.swarm.service.name"]; ok {
-			name = fmt.Sprintf("%s..%x", serviceName, spec)
+		if defaultConfig {
+			if defaultName, ok := config.Labels["com.github.private.volume.default.name"]; ok {
+				name = defaultName
+			} else if serviceName, ok := config.Labels["com.docker.swarm.service.name"]; ok {
+				name = fmt.Sprintf("%s..%x", serviceName, spec)
+			}
 		}
 		destination := filepath.Clean(spec)
 
