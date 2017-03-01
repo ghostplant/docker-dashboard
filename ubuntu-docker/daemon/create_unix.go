@@ -174,6 +174,13 @@ func (daemon *Daemon) createContainerPlatformSpecificSettings(container *contain
 
 	if disabled, ok := config.Labels["com.github.private.volume.default.disabled"]; ok && disabled == "true" {
 		config.Volumes = make(map[string]struct{})
+	} else if ext, ok := config.Labels["com.github.private.volume.extension.paths"]; ok {
+		paths := strings.Split(ext, ",")
+		for id := range paths {
+			if len(paths[id]) > 0 && paths[id][0] == '/' {
+				config.Volumes[paths[id]] = struct{}{}
+			}
+		}
 	}
 
 	for spec := range config.Volumes {
