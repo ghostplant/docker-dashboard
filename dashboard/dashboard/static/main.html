@@ -257,11 +257,12 @@
 				++running[obj.tasks[i].ServiceID];
 		}
 
-		$('#service_title').html('<th>ID</th><th>Image</th><th>Replicas</th><th>Publication</th>');
+		$('#service_title').html('<th>ID</th><th>Name</th><th>Image</th><th>Replicas</th><th>Publication</th>');
 		var table = '';
 		for (var i = 0; i < obj.services.length; ++i) {
 			table += '<tr>';
-			table += '<td>' + obj.services[i].ID + ' (' + obj.services[i].Spec.Name + ')</td>';
+			table += '<td>' + obj.services[i].ID + '</td>';
+			table += '<td>' + obj.services[i].Spec.Name + '</td>';
 			table += '<td>' + obj.services[i].Spec.TaskTemplate.ContainerSpec.Image + '</td>';
 			if (running[obj.services[i].ID] == null)
 				running[obj.services[i].ID] = 0;
@@ -269,11 +270,15 @@
 			table += '<td><button class="btn btn-sm btn-default" onclick="service_scale(null, \'' + obj.services[i].ID + '\')">' + running[obj.services[i].ID] + '/' + obj.services[i].Spec.Mode.Replicated.Replicas + '</button></td>';
 
 			var ports = '';
-			for (var j = 0; j < obj.services[i].Endpoint.Ports.length; ++j) {
-				if (j > 0)
-					ports += '<br/>';
-				ports += obj.services[i].Endpoint.Ports[j].PublishedPort + ':' + obj.services[i].Endpoint.Ports[j].TargetPort + '/' + obj.services[i].Endpoint.Ports[j].Protocol;
-				ports += ' <a href="http://' + window.location.hostname + ":" + obj.services[i].Endpoint.Ports[j].PublishedPort + '" target="_blank">http</a>';
+			if (obj.services[i].Endpoint.Ports != null) {
+				for (var j = 0; j < obj.services[i].Endpoint.Ports.length; ++j) {
+					if (j > 0)
+						ports += '<br/>';
+					ports += obj.services[i].Endpoint.Ports[j].PublishedPort + ':' + obj.services[i].Endpoint.Ports[j].TargetPort + '/' + obj.services[i].Endpoint.Ports[j].Protocol;
+					ports += ' <a href="http://' + window.location.hostname + ":" + obj.services[i].Endpoint.Ports[j].PublishedPort + '" target="_blank">http</a>';
+				}
+			} else {
+				ports = '(no ports)';
 			}
 			table += '<td>' + ports + '</td>';
 			table += '</tr>';

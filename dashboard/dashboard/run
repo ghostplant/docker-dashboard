@@ -11,7 +11,7 @@ if [ -f /.dockerenv ] && [ "$INIT_ACCOUNT" = "" ]; then
 	exit 0
 fi
 
-LISTEN=${LISTEN:-443 ssl}
+LISTEN=${LISTEN:-80}
 INIT_ACCOUNT=${INIT_ACCOUNT:-admin:badmin}  # $(tr -cd A-z </dev/urandom | head -c 8)
 
 WORKDIR=$(dirname $0)

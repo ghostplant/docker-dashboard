@@ -34,7 +34,7 @@ http {
 
 		auth_basic "permission";
 		auth_basic_user_file /var/lib/docker/ssl/auth.basic;
-		add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+		# add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 		
 		location / {
 			try_files $uri $uri/ =404;
