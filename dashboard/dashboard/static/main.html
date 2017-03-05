@@ -42,6 +42,24 @@
 		}).modal('show');
 	}
 
+	function preload() {
+		if (window.progressTimer != undefined)
+			clearTimeout(window.progressTimer);
+		document.getElementById('req_progress').style.display = 'block';
+		document.getElementById('req_progress').style.width = '20%';
+	}
+
+	function postload() {
+		if (window.progressTimer != undefined)
+			clearTimeout(window.progressTimer);
+		document.getElementById('req_progress').style.display = 'block';
+		document.getElementById('req_progress').style.width = '100%';
+		window.progressTimer = setTimeout(function() {
+			$('#req_progress').fadeOut(500, function() { document.getElementById('req_progress').style.width = '0%'; });
+			window.progressTimer = null;
+		}, 200);
+	}
+
 	function request(key, callback, method, text) {
 		var req = new XMLHttpRequest();
 		req.onreadystatechange = function () {
@@ -152,6 +170,7 @@
 			$('#machine_refresh').attr('disabled', true);
 			$('#machine_tokens').attr('disabled', true);
 			$('#machine_table').fadeOut();
+			preload();
 			return request('/nodes', machine_update);
 		}
 		var obj = JSON.parse(data);
@@ -195,6 +214,7 @@
 		$('#machine_tokens').attr('disabled', false);
 		$('#machine_refresh').attr('disabled', false);
 		$('#machine_table').fadeIn();
+		postload();
 	}
 
 	function service_scale(id, data) {
@@ -236,6 +256,7 @@
 			$('#service_refresh').attr('disabled', true);
 			$('#service_pre_create').attr('disabled', true);
 			$('#service_table').fadeOut();
+			preload();
 			return request('/services', function(service_data) {
 				request('/tasks', function(task_data) {
 					service_update(JSON.stringify({
@@ -288,6 +309,7 @@
 		$('#service_refresh').attr('disabled', false);
 		$('#service_pre_create').attr('disabled', false);
 		$('#service_table').fadeIn();
+		postload();
 	}
 	
 	// curl -m 2 -s --unix-socket /var/run/docker.sock http:/info
@@ -464,7 +486,7 @@
 </script>
 
 <body onload="initialize()" style="margin-left: 10px; margin-right: 10px">
-
+    <div id="req_progress" style="background-color: rgb(119, 182, 255); box-shadow: rgba(119, 182, 255, 0.701961) 0px 0px 10px 0px; color: rgb(36, 41, 46); height: 4px; left: 0px; top: 0px; position: fixed; transition: width 0.4s ease 0s; width: 0%; z-index: 9999;"></div>
     <nav class="navbar navbar-inverse navbar-fixed-top">
       <div class="container">
         <div class="navbar-header">
