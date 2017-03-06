@@ -177,7 +177,7 @@
 		if (obj.message != null)
 			return window.location.href = '/';
 		
-		$('#machine_title').html('<th>ID</th><th>Hostname</th><th>NanoCPUs</th><th>MemoryBytes</th><th>Status</th><th>Role</th><th>Control</th>');
+		$('#machine_title').html('<th>Host ID</th><th>Hostname</th><th>NanoCPUs</th><th>MemoryBytes</th><th>Status</th><th>Role</th><th>Control</th>');
 
 		var managers = '', workers = '';
 		for (var i = 0; i < obj.length; ++i) {
@@ -221,21 +221,16 @@
 		if (id != null) {
 			if (id != '')
 				return messagebox('Scaling/Removing Failed: ' + id, 'Error');
-			return service_update();
+			return task_update();
 		}
 		
-		inputbox("Please input the number you want to scale or remove:", "Service Scaling", "", "For example: 0, 1, 2, .. (-1 for removing)", function(num) {
+		inputbox("Please input the number you want to scale:<br/>", "Service Scaling", "", "For example: 0, 1, 2, ..", function(num) {
 			try {
 				num = parseInt(num);
-				if (isNaN(num))
+				if (isNaN(num) || num < 0)
 					throw "Illegal scaling number.";
 			} catch (err) {
 				return messagebox('Scaling Failed: ' + err, 'Error');
-			}
-			if (num < 0) {
-				return confirmbox("Service removal is un-recoverable. Are you sure to remove '" + data + "'?", function() {
-					request('/services/' + data, service_scale, 'DELETE');
-				});
 			}
 			request('/services/' + data, function(service_data) {
 				try {
@@ -250,70 +245,141 @@
 			});
 		});
 	}
-
-	function service_update(data) {
+	
+	function service_delete(data) {
+		confirmbox("Service deletion is un-recoverable. Are you sure to remove '" + data + "'?", function() {
+			request('/services/' + data, function(reply) {
+				task_update();
+			}, 'DELETE');
+		});
+	}
+	
+	function task_update(data) {
 		if (data == null) {
-			$('#service_refresh').attr('disabled', true);
-			$('#service_pre_create').attr('disabled', true);
-			$('#service_table').fadeOut();
+			$('#task_refresh').attr('disabled', true);
+			$('#service_new').attr('disabled', true);
+			$('#task_table').fadeOut();
 			preload();
 			return request('/services', function(service_data) {
 				request('/tasks', function(task_data) {
-					service_update(JSON.stringify({
+					task_update(JSON.stringify({
 						services: JSON.parse(service_data),
 						tasks: JSON.parse(task_data)
 					}));
 				});
 			});
 		}
+
 		var obj = JSON.parse(data);
-		
-		var running = [];
-		for (var i = 0; i < obj.tasks.length; ++i) {
-			if (obj.tasks[i].Status.State != "running")
-				continue;
-			if (running[obj.tasks[i].ServiceID] == null)
-				running[obj.tasks[i].ServiceID] = 1;
-			else
-				++running[obj.tasks[i].ServiceID];
-		}
-
-		$('#service_title').html('<th>ID</th><th>Name</th><th>Image</th><th>Replicas</th><th>Publication</th>');
+		var serviceMap = {};
+		for (var i = 0; i < obj.services.length; ++i)
+			serviceMap[obj.services[i].ID] = obj.services[i];
+		$('#task_title').html('<th>-</th><th>Task Name</th><th>Replicas</th><th>Publications</th><th>Running on (Host ID)</th><th>Image</th><th>Status</th><th>Message</th><th>Deletion</th>');
 		var table = '';
-		for (var i = 0; i < obj.services.length; ++i) {
-			table += '<tr>';
-			table += '<td>' + obj.services[i].ID + '</td>';
-			table += '<td>' + obj.services[i].Spec.Name + '</td>';
-			table += '<td>' + obj.services[i].Spec.TaskTemplate.ContainerSpec.Image + '</td>';
-			if (running[obj.services[i].ID] == null)
-				running[obj.services[i].ID] = 0;
+		obj.tasks.sort(function(a, b) {
+			var left = serviceMap[a.ServiceID];
+			var right = serviceMap[b.ServiceID];
+			if (left.Spec.Name != right.Spec.Name)
+				return left.Spec.Name < right.Spec.Name ? -1 : 1;
+			if (a.Status.State == 'running' && b.Status.State != 'running')
+				return -1;
+			if (b.Status.State == 'running' && a.Status.State != 'running')
+				return 1;
+			return a.Slot < b.Slot ? -1 : 1;
+		});
+		
+		var prevService = "";
+		var odd = true;
+		var groupID = 0;
+		for (var i = 0; i < obj.tasks.length; ++i) {
+			var service = serviceMap[obj.tasks[i].ServiceID];
+			if (service == null)
+				continue;
+			if (prevService != service.Spec.Name) {
+				odd = !odd;
+				++groupID;
+			}
+			if (odd)
+				table += '<tr style="background-color: #EEFFEE">';
+			else
+				table += '<tr style="background-color: #EEEEFF">';
+			table += '<td>(' + groupID + ')</td>';
+			
+			var containerName = service.Spec.Name + '.' + obj.tasks[i].Slot + '.' + obj.tasks[i].ID;
+			var color = null;
+			if (obj.tasks[i].Status.State == 'running')
+				color = 'green';
+			else if (obj.tasks[i].DesiredState == obj.tasks[i].Status.State || 'rejected' != obj.tasks[i].Status.State)
+				color = 'orange';
+			else
+				color = 'red';
 
-			table += '<td><button class="btn btn-sm btn-default" onclick="service_scale(null, \'' + obj.services[i].ID + '\')">' + running[obj.services[i].ID] + '/' + obj.services[i].Spec.Mode.Replicated.Replicas + '</button></td>';
-
-			var ports = '';
-			if (obj.services[i].Endpoint.Ports != null) {
-				for (var j = 0; j < obj.services[i].Endpoint.Ports.length; ++j) {
+			if (color == 'green' && $('#swarm_node').html() == obj.tasks[i].NodeID)
+				table += '<td><a href="#">' + containerName + '</a></td>';
+			else
+				table += '<td>' + containerName + '</td>';
+			
+			if (color == 'green') {
+				table += '<td><button class="btn btn-sm btn-info" onclick="service_scale(null, \'' + service.ID + '\')">1 of ' + service.Spec.Mode.Replicated.Replicas + '</button></td>';
+			} else if (color == 'orange') {
+				table += '<td><button class="btn btn-sm btn-default" onclick="service_scale(null, \'' + service.ID + '\')">0 of ' + service.Spec.Mode.Replicated.Replicas + '</button></td>';
+			} else {
+				table += '<td><button class="btn btn-sm btn-danger" onclick="service_scale(null, \'' + service.ID + '\')">0 of ' + service.Spec.Mode.Replicated.Replicas + '</button></td>';
+			}
+			
+			var ports = null;
+			if (prevService == service.Spec.Name) {
+				ports = '-';
+			} else if (service.Endpoint.Ports != null) {
+				for (var j = 0; j < service.Endpoint.Ports.length; ++j) {
 					if (j > 0)
 						ports += '<br/>';
-					ports += obj.services[i].Endpoint.Ports[j].PublishedPort + ':' + obj.services[i].Endpoint.Ports[j].TargetPort + '/' + obj.services[i].Endpoint.Ports[j].Protocol;
-					ports += ' <a href="http://' + window.location.hostname + ":" + obj.services[i].Endpoint.Ports[j].PublishedPort + '" target="_blank">http</a>';
+					ports += service.Endpoint.Ports[j].PublishedPort + ':' + service.Endpoint.Ports[j].TargetPort + '/' + service.Endpoint.Ports[j].Protocol;
+					// ports += ' <a href="http://' + window.location.hostname + ":" + service.Endpoint.Ports[j].PublishedPort + '" target="_blank">http</a>';
 				}
 			} else {
-				ports = '(no ports)';
+				ports = '(nothing)';
 			}
 			table += '<td>' + ports + '</td>';
+			
+			table += '<td>' + obj.tasks[i].NodeID + '</td>';
+			
+			if (prevService == service.Spec.Name)
+				table += '<td>-</td>';
+			else {
+				var imageArgs = [];
+				if (service.Spec.TaskTemplate.ContainerSpec.Args != null) {
+					for (var j = 0; j < service.Spec.TaskTemplate.ContainerSpec.Args.length; ++j)
+						imageArgs.push('"' + service.Spec.TaskTemplate.ContainerSpec.Args[j] + '"');
+				}
+				table += '<td>' + service.Spec.TaskTemplate.ContainerSpec.Image + ' [' + imageArgs.join(", ") + ']</td>';
+			}
+			
+			if (color == 'green') {
+				table += '<td style="color:' + color + '">' + obj.tasks[i].Status.State + '</td>';
+				// table += '<td> cid = ' + obj.tasks[i].Status.ContainerStatus.ContainerID + '</td>';
+				table += '<td style="color:' + color + '">' + obj.tasks[i].Status.Message + '</td>';
+			} else {
+				table += '<td style="color:' + color + '">' + obj.tasks[i].Status.State + '</td>';
+				if (obj.tasks[i].Status.Err)
+					table += '<td style="color:' + color + '">' + obj.tasks[i].Status.Err + '</td>';
+				else
+					table += '<td style="color:' + color + '">' + obj.tasks[i].Status.Message + '</td>';
+			}
+			
+			if (prevService == service.Spec.Name)
+				table += '<td>-</td>';
+			else
+				table += '<td><button class="btn btn-sm btn-danger" onclick="service_delete(\'' + service.Spec.Name + '\')">Delete</button></td>';
 			table += '</tr>';
+			prevService = service.Spec.Name;
 		}
-		$('#service_body').html(table);
-
-		$('#service_refresh').attr('disabled', false);
-		$('#service_pre_create').attr('disabled', false);
-		$('#service_table').fadeIn();
+		$('#task_body').html(table);
+		$('#service_new').attr('disabled', false);
+		$('#task_refresh').attr('disabled', false);
+		$('#task_table').fadeIn();
 		postload();
 	}
-	
-	// curl -m 2 -s --unix-socket /var/run/docker.sock http:/info
-	// curl -m 2 -s --unix-socket /var/run/docker.sock -H 'Content-Type: application/json' -X POST -d '' http:..
 
 	function swarm_join(data, token) {
 		if (data == null) {
@@ -382,6 +448,7 @@
 					return swarm_join(null, result);
 				});
 			}
+			$('#swarm_version').html(obj.info.ServerVersion);
 			$('#swarm_node').html(obj.info.Swarm.NodeID);
 			$('#swarm_role').html('worker');
 			return messagebox(obj.swarm.message + '<br/><br/>But you can still "Leave from Swarm".', "Infomation from Swarm");
@@ -398,11 +465,12 @@
 		var token_worker = obj.swarm.JoinTokens.Worker;
 		
 		$('#swarm_token').html('<p><strong>Join as Manager:</strong> ' + naddr + '@' + token_manager + '</p><p><strong>Join as Worker:</strong> ' + naddr + '@' + token_worker + '</p>');
+			$('#swarm_version').html(obj.info.ServerVersion);
 		$('#swarm_node').html(obj.info.Swarm.NodeID);
 		$('#swarm_role').html('manager');
 
 		machine_update();
-		service_update();
+		task_update();
 	}
 
 	function service_create(data, pre) {
@@ -434,7 +502,6 @@
 			} catch (err) {
 				return messagebox('Failed parsing create JSON text:<br/><br/>' + err, 'Error');
 			}
-			
 			return request('/services/create', function(data) {
 				service_create(data);
 			}, 'POST', JSON.stringify({
@@ -446,13 +513,16 @@
 					}
 				},"TaskTemplate":{
 					"ContainerSpec":{
-						"Image":obj.image
+						"Image":obj.image,
+						"Args": obj.args
 					},"Placement":{
 					},"Resources":{
 						"Limits":{
 						},"Reservations":{
 						}
 					},"RestartPolicy":{
+						"Condition": "none",
+						"MaxAttempts": 0
 					}
 				},"UpdateConfig":{
 					"FailureAction":"pause",
@@ -468,7 +538,7 @@
 		}
 		
 		messagebox('Service successfully created: ' + data, 'Infomation', function() {
-			service_update();
+			task_update();
 		});
 	}
 
@@ -481,7 +551,7 @@
 
 	function initialize() {
 		system_info();
-		$('#compose_yaml').val('{"image": "ghostplant/http-checker:latest", "expose": ["tcp/10001:80"]}');
+		$('#compose_yaml').val('{\n\t"image": "alpine:3.4",\n\t"args": ["sh", "-c", "sleep 10s"]\n}');
 	}
 </script>
 
@@ -496,7 +566,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="#">Dashboard (v0.1) for Docker Swarm v1.12+</a>
+          <a class="navbar-brand" href="#">GUI of Docker Swarm Private v1.12</a>
         </div>
         <div id="navbar" class="navbar-collapse collapse">
           <ul class="nav navbar-nav">
@@ -509,11 +579,32 @@
     </nav>
 	<div style="margin-top: 70px"></div>
 	<div class="alert alert-info" role="alert" id="msg_box"><strong>Successully logged in!</strong></div>
+	
 	<div class="panel panel-success">
 		<div class="panel-heading">
-			<h3 class="panel-title"><strong>Global Machines</strong>
+			<h3 class="panel-title"><strong>Swarm Tasks</strong>
+				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="task_update()" id="task_refresh" disabled="true">Refresh</button>
+				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="service_create(null, 'pre')" id="service_new" disabled="true">Create</button>
+			</h3>
+		</div>
+		<div class="panel-body">
+	          <div class="col-md">
+	            <table class="table" id="task_table" style="margin-top: 10px; display:none">
+	              <thead>
+	                <tr id="task_title">
+	                </tr>
+	              </thead>
+	              <tbody id="task_body">
+ 	              </tbody>
+ 	            </table>
+ 	          </div>
+		</div>
+	</div>
+	<div class="panel panel-success">
+		<div class="panel-heading">
+			<h3 class="panel-title"><strong>Swarm Hosts</strong>
 				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="machine_update()" id="machine_refresh" disabled="true">Refresh</button>
-				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="report_token()" id="machine_tokens" disabled="true">Swarm Token</button>
+				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="report_token()" id="machine_tokens" disabled="true">Token</button>
 			</h3>
 		</div>
 		<div class="panel-body">
@@ -531,26 +622,28 @@
 	</div>
 	<div class="panel panel-success">
 		<div class="panel-heading">
-			<h3 class="panel-title"><strong>Global Services</strong>
-				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="service_update()" id="service_refresh" disabled="true">Refresh</button>
-				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="service_create(null, 'pre')" id="service_pre_create" disabled="true">Create</button>
+			<h3 class="panel-title"><strong>Host Infomation</strong>
+				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="info_update()" id="info_refresh" disabled="true">Refresh</button>
 			</h3>
 		</div>
 		<div class="panel-body">
 	          <div class="col-md">
-	            <table class="table" id="service_table" style="margin-top: 10px; display:none">
+				<div><strong>Current Host ID: </strong><span id="swarm_node"></span></div>
+				<div><strong>Current Server Version: </strong><span id="swarm_version"></span></div>
+	            <table class="table" id="info_table" style="margin-top: 10px; display:none">
 	              <thead>
-	                <tr id="service_title">
+	                <tr id="info_title">
 	                </tr>
 	              </thead>
-	              <tbody id="service_body">
+	              <tbody id="info_body">
  	              </tbody>
  	            </table>
  	          </div>
 		</div>
-		<div style="display: none" id="swarm_token"></div>
-		<div style="display: none" id="swarm_node"></div>
-		<div style="display: none" id="swarm_role"></div>
+	</div>
+	<div style="display: none">
+		<div id="swarm_token"></div>
+		<div id="swarm_role"></div>
 	</div>
 
 <!-- Modal Messagbox/Confirm -->
