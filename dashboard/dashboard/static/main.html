@@ -177,11 +177,12 @@
 		if (obj.message != null)
 			return window.location.href = '/';
 		
-		$('#machine_title').html('<th>Host ID</th><th>Hostname</th><th>NanoCPUs</th><th>MemoryBytes</th><th>Status</th><th>Role</th><th>Control</th>');
+		$('#machine_title').html('<th>-</th><th>Host ID</th><th>Hostname</th><th>NanoCPUs</th><th>MemoryBytes</th><th>Status</th><th>Role</th><th>Control</th>');
 
-		var managers = '', workers = '';
+		var managers = '', workers = '', groupID = 0;
 		for (var i = 0; i < obj.length; ++i) {
 			var table = '<tr>';
+			table += '<td>' + (++groupID) + '</td>';
 			if ($('#swarm_node').html() == obj[i].ID)
 				table += '<td><strong>' + obj[i].ID + '</strong></td>';
 			else
@@ -303,7 +304,7 @@
 				table += '<tr style="background-color: #EEFFEE">';
 			else
 				table += '<tr style="background-color: #EEEEFF">';
-			table += '<td>(' + groupID + ')</td>';
+			table += '<td>' + groupID + '</td>';
 			
 			var containerName = service.Spec.Name + '.' + obj.tasks[i].Slot + '.' + obj.tasks[i].ID;
 			var color = null;
@@ -484,6 +485,10 @@
 			var obj = {}, ports = [];
 			try {
 				obj = JSON.parse($('#compose_yaml').val());
+				if (obj.version == undefined)
+					throw "Version field must be specified!";
+				else if (obj.version != 1)
+					throw "Desciption of this version (" + obj.version + ") is not supported!";
 				if (obj.expose) {
 					for (var i = 0; i < obj.expose.length; ++i) {
 						var parts = obj.expose[i].split('/', 2);
@@ -551,7 +556,7 @@
 
 	function initialize() {
 		system_info();
-		$('#compose_yaml').val('{\n\t"image": "alpine:3.4",\n\t"args": ["sh", "-c", "sleep 10s"]\n}');
+		$('#compose_yaml').val('{\n\t"version": 1,\n\t"name": "my_example",\n\t"image": "alpine:3.4",\n\t"args": ["sh", "-c", "sleep 10s"],\n\t"expose": ["tcp/8080:80"],\n\t"replicas": 1\n}');
 	}
 </script>
 
