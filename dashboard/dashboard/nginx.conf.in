@@ -26,14 +26,14 @@ http {
 
 	server {
 		listen %LISTEN% default_server;
-		ssl_certificate /var/lib/docker/ssl/ca.pem;
-		ssl_certificate_key /var/lib/docker/ssl/ca.pem;
+		#ssl_certificate /var/lib/docker/ssl/ca.pem;
+		#ssl_certificate_key /var/lib/docker/ssl/ca.pem;
 
 		root %WORKDIR%/static;
 		index main.html;
 
-		auth_basic "permission";
-		auth_basic_user_file /var/lib/docker/ssl/auth.basic;
+		#auth_basic "permission";
+		#auth_basic_user_file /var/lib/docker/ssl/auth.basic;
 		# add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 		
 		location / {
@@ -46,7 +46,7 @@ http {
 		}
 
 		location ~ ^/v(.*) {
-			proxy_pass http://unix:/var/run/docker.sock;
+			proxy_pass http://unix:/run/docker.sock;
 		}
 	}
 }

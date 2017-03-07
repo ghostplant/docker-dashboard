@@ -1,7 +1,9 @@
-FROM docker:1.12.4
+FROM alpine:3.4
 MAINTAINER CUI Wei <ghostplant@qq.com>
 
-RUN apk update && apk add iptables nginx && rm -r /var/cache/apk
+RUN apk --update add nginx && rm -r /var/cache/apk
 ADD dashboard /opt/dashboard
 
-CMD ["sh", "-c", "dockerd & /opt/dashboard/run"]
+EXPOSE 80
+# VOLUME ["/run"]
+CMD ["sh", "-c", "/opt/dashboard/run"]
