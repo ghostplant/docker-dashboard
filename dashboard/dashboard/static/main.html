@@ -294,7 +294,7 @@
 		var groupID = 0;
 		for (var i = 0; i < obj.tasks.length; ++i) {
 			var service = serviceMap[obj.tasks[i].ServiceID];
-			if (service == null)
+			if (service == null || service.Spec.Mode.Global)
 				continue;
 			if (prevService != service.Spec.Name) {
 				odd = !odd;
