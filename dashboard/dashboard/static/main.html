@@ -12,6 +12,21 @@
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
 -->
 
+<style type="text/css">
+        .bg-blur {
+            float: left;
+            width: 100%;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: cover;
+            -webkit-filter: blur(3px);
+            -moz-filter: blur(3px);
+            -o-filter: blur(3px);
+            -ms-filter: blur(3px);
+            filter: blur(3px);
+        }
+</style>
+
 <script>
 
 	function messagebox(msg, title, callback) {
@@ -47,6 +62,7 @@
 			clearTimeout(window.progressTimer);
 		document.getElementById('req_progress').style.display = 'block';
 		document.getElementById('req_progress').style.width = '20%';
+		// $('#root_body').addClass("bg-blur");
 	}
 
 	function postload() {
@@ -57,6 +73,7 @@
 		window.progressTimer = setTimeout(function() {
 			$('#req_progress').fadeOut(500, function() { document.getElementById('req_progress').style.width = '0%'; });
 			window.progressTimer = null;
+			// $('#root_body').removeClass("bg-blur");
 		}, 200);
 	}
 
@@ -582,6 +599,8 @@
         </div><!--/.nav-collapse -->
       </div>
     </nav>
+
+    <div id="root_body">
 	<div style="margin-top: 70px"></div>
 	<div class="alert alert-info" role="alert" id="msg_box"><strong>Successully logged in!</strong></div>
 	
@@ -650,6 +669,7 @@
 		<div id="swarm_token"></div>
 		<div id="swarm_role"></div>
 	</div>
+    </div>
 
 <!-- Modal Messagbox/Confirm -->
 <div id="confirmModal" class="modal fade">
