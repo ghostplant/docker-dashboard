@@ -270,6 +270,20 @@
 		});
 	}
 	
+	function local_update(data) {
+		if (data == null) {
+			$('#local_refresh').attr('disabled', true);
+			$('#local_table').fadeOut();
+			preload();
+		}
+		$('#local_title').html('<th>-</th><th>Container ID</th><th>Status</th><th>CPU</th><th>Memory</th><th>Pids</th><th>Volume Driver</th><th>Disk</th><th>Control</th>');
+		var table = '';
+		$('#local_body').html(table);
+		$('#local_refresh').attr('disabled', false);
+		$('#local_table').fadeIn();
+		postload();
+	}
+
 	function task_update(data) {
 		if (data == null) {
 			$('#task_refresh').attr('disabled', true);
@@ -469,6 +483,8 @@
 			$('#swarm_role').html('worker');
 			$('#worker_mode').html(obj.swarm.message + '<br/><br/>But you can still "Leave from Swarm".');
 			$('#worker_mode').css('display', '');
+			$('#field_manager').css('display', 'none');
+			local_update();
 		}
 		var nid = obj.info.Swarm.NodeID;
 		var naddr = null;
@@ -593,7 +609,7 @@
           <ul class="nav navbar-nav">
             <li class="active"><a href="/">Home</a></li>
             <li><a href="#" onclick="machine_leave()">Leave from Swarm</a></li>
-            <li><a href="#" onclick="messagebox('<strong>Auther:</strong> CUI Wei &lt;<span>ghostplant@qq.com</span>&gt;', 'About Swarm Dashborad')">About</a></li>
+            <li><a href="#" onclick="messagebox('<strong>Maintainer:</strong> CUI Wei &lt;<a href=mailto:ghostplant@qq.com >ghostplant@qq.com</a>&gt;<br/><br/><strong>Launchpad:</strong> <a href=https://launchpad.net/~ghostplant target=_blank >https://launchpad.net/~ghostplant</a><br/><br/><strong>Github:</strong> <a href=https://github.com/ghostplant target=_blank >https://github.com/ghostplant</a>', 'About Swarm Dashborad')">About</a></li>
           </ul>
         </div><!--/.nav-collapse -->
       </div>
@@ -604,42 +620,63 @@
 	<div class="alert alert-info" role="alert" id="msg_box"><strong>Successully logged in!</strong></div>
 	<div class="alert alert-info" role="alert" style="display:none" id="worker_mode"></div>
 	
-	<div class="panel panel-success">
-		<div class="panel-heading">
-			<h3 class="panel-title"><strong>Swarm Tasks</strong>
-				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="task_update()" id="task_refresh" disabled="true">Refresh</button>
-				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="service_create(null, 'pre')" id="service_new" disabled="true">Create</button>
-			</h3>
+	<div id="field_manager">
+		<div class="panel panel-success">
+			<div class="panel-heading">
+				<h3 class="panel-title"><strong>Swarm Tasks</strong>
+					<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="task_update()" id="task_refresh" disabled="true">Refresh</button>
+					<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="service_create(null, 'pre')" id="service_new" disabled="true">Create</button>
+				</h3>
+			</div>
+			<div class="panel-body">
+			      <div class="col-md">
+			        <table class="table" id="task_table" style="margin-top: 10px; display:none">
+			          <thead>
+						<tr id="task_title">
+						</tr>
+			          </thead>
+			          <tbody id="task_body">
+					  </tbody>
+					</table>
+		          </div>
+			</div>
 		</div>
-		<div class="panel-body">
-	          <div class="col-md">
-	            <table class="table" id="task_table" style="margin-top: 10px; display:none">
-	              <thead>
-	                <tr id="task_title">
-	                </tr>
-	              </thead>
-	              <tbody id="task_body">
- 	              </tbody>
- 	            </table>
- 	          </div>
+		<div class="panel panel-success">
+			<div class="panel-heading">
+				<h3 class="panel-title"><strong>Swarm Hosts</strong>
+					<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="machine_update()" id="machine_refresh" disabled="true">Refresh</button>
+					<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="report_token()" id="machine_tokens" disabled="true">Token</button>
+				</h3>
+			</div>
+			<div class="panel-body">
+			      <div class="col-md">
+			        <table class="table" id="machine_table" style="margin-top: 10px; display:none">
+			          <thead>
+			            <tr id="machine_title">
+			            </tr>
+			          </thead>
+			          <tbody id="machine_body">
+					</tbody>
+		            </table>
+		          </div>
+			</div>
 		</div>
 	</div>
 	<div class="panel panel-success">
 		<div class="panel-heading">
-			<h3 class="panel-title"><strong>Swarm Hosts</strong>
-				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="machine_update()" id="machine_refresh" disabled="true">Refresh</button>
-				<button type="button" class="btn btn-warning btn-sm" style="margin-left: 10px" onclick="report_token()" id="machine_tokens" disabled="true">Token</button>
+			<h3 class="panel-title"><strong>Local Containers</strong>
+				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="local_update()" id="local_refresh" disabled="true">Refresh</button>
 			</h3>
 		</div>
 		<div class="panel-body">
 	          <div class="col-md">
-	            <table class="table" id="machine_table" style="margin-top: 10px; display:none">
-	              <thead>
-	                <tr id="machine_title">
-	                </tr>
-	              </thead>
-	              <tbody id="machine_body">
- 	              </tbody>
+	            <table class="table" id="local_table" style="margin-top: 10px; display:none">
+				<thead>
+				  <tr id="local_title">
+				  </tr>
+				</thead>
+				<tbody id="local_body">
+ 				</tbody>
  	            </table>
  	          </div>
 		</div>
@@ -652,15 +689,15 @@
 		</div>
 		<div class="panel-body">
 	          <div class="col-md">
-				<div><strong>Current Host ID: </strong><span id="swarm_node"></span></div>
-				<div><strong>Current Server Version: </strong><span id="swarm_version"></span></div>
-	            <table class="table" id="info_table" style="margin-top: 10px; display:none">
-	              <thead>
-	                <tr id="info_title">
-	                </tr>
-	              </thead>
-	              <tbody id="info_body">
- 	              </tbody>
+	            <table class="table" id="info_table">
+					<tr>
+						<td><strong>Local Host ID:</strong></td>
+						<td><span id="swarm_node"></span></td>
+					</tr>
+					<tr>
+						<td><strong>Local Daemon Version:</strong></td>
+						<td><span id="swarm_version"></span></td>
+					</tr>
  	            </table>
  	          </div>
 		</div>
@@ -676,15 +713,15 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                <h4 class="modal-title" id="confirm_title"></h4>
+			  <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			  <h4 class="modal-title" id="confirm_title"></h4>
             </div>
             <div class="modal-body">
-                <p id="confirm_message"></p>
+			  <p id="confirm_message"></p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal" id="confirm_cancel">Cancel</button>
-                <button type="button" class="btn btn-primary" data-dismiss="modal" id="confirm_okay">Okay</button>
+			  <button type="button" class="btn btn-default" data-dismiss="modal" id="confirm_cancel">Cancel</button>
+			  <button type="button" class="btn btn-primary" data-dismiss="modal" id="confirm_okay">Okay</button>
             </div>
         </div>
     </div>
@@ -695,20 +732,20 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                <h4 class="modal-title">Create a New Service</h4>
+			  <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			  <h4 class="modal-title">Create a New Service</h4>
             </div>
             <div class="modal-body">
-                <p>
+			  <p>
 	            <div style="margin-top: 10px">
-	               <h4><strong>New Service:</strong></h4>
-	               <textarea class="form-control" rows="10" id="compose_yaml"></textarea>
+				 <h4><strong>New Service:</strong></h4>
+				 <textarea class="form-control" rows="10" id="compose_yaml"></textarea>
 	            </div>
-                </p>
+			  </p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-warning btn-primary" data-dismiss="modal" onclick="service_create()">Create</button>
+			  <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+			  <button type="button" class="btn btn-warning btn-primary" data-dismiss="modal" onclick="service_create()">Create</button>
             </div>
         </div>
     </div>
@@ -719,20 +756,20 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
-                <h4 class="modal-title" id="input_title"></h4>
+			  <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+			  <h4 class="modal-title" id="input_title"></h4>
             </div>
             <div class="modal-body">
-                <p>
+			  <p>
 	            <div style="margin-top: 10px">
-	               <h5 id="input_message" style="margin-bottom: 10px"></h5>
-	               <input id="input_text" placeholder="" class="form-control" type="text" />
+				 <h5 id="input_message" style="margin-bottom: 10px"></h5>
+				 <input id="input_text" placeholder="" class="form-control" type="text" />
 	            </div>
-                </p>
+			  </p>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" data-dismiss="modal" id="input_next">Next</button>
+			  <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+			  <button type="button" class="btn btn-primary" data-dismiss="modal" id="input_next">Next</button>
             </div>
         </div>
     </div>
