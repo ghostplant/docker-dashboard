@@ -273,6 +273,8 @@
 	function local_update(data) {
 		if (window.local == null)
 			window.local = 0;
+		else
+			++window.local;
 		if (data == null) {
 			$('#local_refresh').attr('disabled', true);
 			$('#local_table').fadeOut();
@@ -294,20 +296,29 @@
 			table += '<td>' + name + '</td>';
 			table += '<td>' + obj[i].Image + '</td>';
 			table += '<td id="load_' + id + '">-</td><td id="cpu_' + id + '">-</td><td id="mem_' + id + '">-</td><td id="pids_' + id + '">-</td><td id="ntx_' + id + '">-</td><td id="nrx_' + id + '">-</td>';
-			table += '<td>' + obj[i].State + '</td>';
+			table += '<td id="state_' + id + '" style="color: green">' + obj[i].State + '</td>';
 			table += '</tr>';
-			request('/containers/' + name + '/stats?stream=false', function(reply) {
+
+			var metric = function(reply) {
 				if (currentLocal != window.local)
 					return;
-				console.log(reply);
-				var res = JSON.parse(reply);
-				$('#load_' + id).html(((res.cpu_stats.cpu_usage.total_usage - res.precpu_stats.cpu_usage.total_usage) * 1e-7).toFixed(0) + ' %');
-				$('#cpu_' + id).html((res.cpu_stats.cpu_usage.total_usage * 1e-9).toFixed(2) + ' s');
-				$('#mem_' + id).html((res.memory_stats.usage * 1e-3).toFixed(2) + ' KB');
-				$('#pids_' + id).html(res.pids_stats.current);
-				$('#ntx_' + id).html((res.network.tx_bytes * 1e-3).toFixed(2) + ' KB');
-				$('#nrx_' + id).html((res.network.rx_bytes * 1e-3).toFixed(2) + ' KB');
-			});
+				if (reply != null) {
+					var res = JSON.parse(reply);
+					console.log(res);
+					$('#load_' + id).html(((res.cpu_stats.cpu_usage.total_usage - res.precpu_stats.cpu_usage.total_usage) * 1e-7).toFixed(0) + ' %');
+					$('#cpu_' + id).html((res.cpu_stats.cpu_usage.total_usage * 1e-9).toFixed(2) + ' s');
+					$('#mem_' + id).html((res.memory_stats.usage * 1e-3).toFixed(2) + ' KB');
+					$('#pids_' + id).html(res.pids_stats.current);
+					$('#ntx_' + id).html((res.network.tx_bytes * 1e-3).toFixed(2) + ' KB');
+					$('#nrx_' + id).html((res.network.rx_bytes * 1e-3).toFixed(2) + ' KB');
+					
+					$('#state_' + id).fadeOut(500).fadeIn(500);
+				}
+				setTimeout(function() {
+					request('/containers/' + name + '/stats?stream=false', metric);
+				}, 2000);
+			};
+			metric();
 		}
 		$('#local_body').html(table);
 		$('#local_refresh').attr('disabled', false);
