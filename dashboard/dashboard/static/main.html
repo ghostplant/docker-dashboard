@@ -194,10 +194,10 @@
 		
 		$('#machine_title').html('<th>-</th><th>Host ID</th><th>Hostname</th><th>NanoCPUs</th><th>MemoryBytes</th><th>Status</th><th>Role</th><th>Control</th>');
 
-		var managers = '', workers = '', groupID = 0;
+		var managers = '', workers = '';
 		for (var i = 0; i < obj.length; ++i) {
 			var table = '<tr>';
-			table += '<td>' + (++groupID) + '</td>';
+			table += '<td>' + (i + 1) + '</td>';
 			if ($('#swarm_node').html() == obj[i].ID)
 				table += '<td><strong>' + obj[i].ID + '</strong></td>';
 			else
@@ -271,13 +271,44 @@
 	}
 	
 	function local_update(data) {
+		if (window.local == null)
+			window.local = 0;
 		if (data == null) {
 			$('#local_refresh').attr('disabled', true);
 			$('#local_table').fadeOut();
 			preload();
+			return request('/containers/json', local_update);
 		}
-		$('#local_title').html('<th>-</th><th>Container ID</th><th>Status</th><th>CPU</th><th>Memory</th><th>Pids</th><th>Volume Driver</th><th>Disk</th><th>Control</th>');
+		var obj = JSON.parse(data);
+		$('#local_title').html('<th>-</th><th>Container Name</th><th>Image</th><th>Load</th><th>CPU</th><th>Memory</th><th>Pids</th><th>NetTx</th><th>NetRx</th><th>State</th>');
+
+		// http:/containers/{name:*}?stdout=true&stderr=true
 		var table = '';
+		var currentLocal = window.local;
+		for (var i = 0; i < obj.length; ++i) {
+			table += '<tr>';
+			table += '<td>' + (i + 1) + '</td>';
+			var id = obj[i].ID, name = obj[i].Names[0];
+			if (name.length > 0 && name[0] == '/')
+				name = name.substring(1);
+			table += '<td>' + name + '</td>';
+			table += '<td>' + obj[i].Image + '</td>';
+			table += '<td id="load_' + id + '">-</td><td id="cpu_' + id + '">-</td><td id="mem_' + id + '">-</td><td id="pids_' + id + '">-</td><td id="ntx_' + id + '">-</td><td id="nrx_' + id + '">-</td>';
+			table += '<td>' + obj[i].State + '</td>';
+			table += '</tr>';
+			request('/containers/' + name + '/stats?stream=false', function(reply) {
+				if (currentLocal != window.local)
+					return;
+				console.log(reply);
+				var res = JSON.parse(reply);
+				$('#load_' + id).html(((res.cpu_stats.cpu_usage.total_usage - res.precpu_stats.cpu_usage.total_usage) * 1e-7).toFixed(0) + ' %');
+				$('#cpu_' + id).html((res.cpu_stats.cpu_usage.total_usage * 1e-9).toFixed(2) + ' s');
+				$('#mem_' + id).html((res.memory_stats.usage * 1e-3).toFixed(2) + ' KB');
+				$('#pids_' + id).html(res.pids_stats.current);
+				$('#ntx_' + id).html((res.network.tx_bytes * 1e-3).toFixed(2) + ' KB');
+				$('#nrx_' + id).html((res.network.rx_bytes * 1e-3).toFixed(2) + ' KB');
+			});
+		}
 		$('#local_body').html(table);
 		$('#local_refresh').attr('disabled', false);
 		$('#local_table').fadeIn();
@@ -481,7 +512,7 @@
 			$('#swarm_version').html(obj.info.ServerVersion);
 			$('#swarm_node').html(obj.info.Swarm.NodeID);
 			$('#swarm_role').html('worker');
-			$('#worker_mode').html(obj.swarm.message + '<br/><br/>But you can still "Leave from Swarm".');
+			$('#worker_mode').html(obj.swarm.message + '<br/><br/>But you can still <button type="button" class="btn btn-warning btn-xs" style="margin-left: 5px" onclick="machine_leave()">Leave from Swarm</button>');
 			$('#worker_mode').css('display', '');
 			$('#field_manager').css('display', 'none');
 			local_update();
@@ -504,6 +535,7 @@
 
 		machine_update();
 		task_update();
+		local_update();
 	}
 
 	function service_create(data, pre) {
@@ -684,7 +716,6 @@
 	<div class="panel panel-success">
 		<div class="panel-heading">
 			<h3 class="panel-title"><strong>Host Infomation</strong>
-				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="info_update()" id="info_refresh" disabled="true">Refresh</button>
 			</h3>
 		</div>
 		<div class="panel-body">
