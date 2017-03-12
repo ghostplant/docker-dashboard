@@ -60,18 +60,16 @@
 	function preload() {
 		if (window.progressTimer != undefined)
 			clearTimeout(window.progressTimer);
-		document.getElementById('req_progress').style.display = 'block';
-		document.getElementById('req_progress').style.width = '20%';
+		$('#req_progress').css('display', 'block').css('width', '20%');
 		// $('#root_body').addClass("bg-blur");
 	}
 
 	function postload() {
 		if (window.progressTimer != undefined)
 			clearTimeout(window.progressTimer);
-		document.getElementById('req_progress').style.display = 'block';
-		document.getElementById('req_progress').style.width = '100%';
+		$('#req_progress').css('display', 'block').css('width', '100%');
 		window.progressTimer = setTimeout(function() {
-			$('#req_progress').fadeOut(500, function() { document.getElementById('req_progress').style.width = '0%'; });
+			$('#req_progress').fadeOut(500, function() { $('#req_progress').css('width', '0%'); });
 			window.progressTimer = null;
 			// $('#root_body').removeClass("bg-blur");
 		}, 200);
@@ -469,7 +467,8 @@
 			$('#swarm_version').html(obj.info.ServerVersion);
 			$('#swarm_node').html(obj.info.Swarm.NodeID);
 			$('#swarm_role').html('worker');
-			return messagebox(obj.swarm.message + '<br/><br/>But you can still "Leave from Swarm".', "Infomation from Swarm");
+			$('#worker_mode').html(obj.swarm.message + '<br/><br/>But you can still "Leave from Swarm".');
+			$('#worker_mode').css('display', '');
 		}
 		var nid = obj.info.Swarm.NodeID;
 		var naddr = null;
@@ -603,6 +602,7 @@
     <div id="root_body">
 	<div style="margin-top: 70px"></div>
 	<div class="alert alert-info" role="alert" id="msg_box"><strong>Successully logged in!</strong></div>
+	<div class="alert alert-info" role="alert" style="display:none" id="worker_mode"></div>
 	
 	<div class="panel panel-success">
 		<div class="panel-heading">
