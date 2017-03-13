@@ -303,16 +303,21 @@
 				if (currentLocal != window.local)
 					return;
 				if (reply != null) {
-					var res = JSON.parse(reply);
-					console.log(res);
-					$('#load_' + id).html(((res.cpu_stats.cpu_usage.total_usage - res.precpu_stats.cpu_usage.total_usage) * 1e-7).toFixed(0) + ' %');
-					$('#cpu_' + id).html((res.cpu_stats.cpu_usage.total_usage * 1e-9).toFixed(2) + ' s');
-					$('#mem_' + id).html((res.memory_stats.usage * 1e-3).toFixed(2) + ' KB');
-					$('#pids_' + id).html(res.pids_stats.current);
-					$('#ntx_' + id).html((res.network.tx_bytes * 1e-3).toFixed(2) + ' KB');
-					$('#nrx_' + id).html((res.network.rx_bytes * 1e-3).toFixed(2) + ' KB');
+					try {
+						var res = JSON.parse(reply);
+						console.log(res);
+						$('#load_' + id).html(((res.cpu_stats.cpu_usage.total_usage - res.precpu_stats.cpu_usage.total_usage) * 1e-7).toFixed(0) + ' %');
+						$('#cpu_' + id).html((res.cpu_stats.cpu_usage.total_usage * 1e-9).toFixed(2) + ' s');
+						$('#mem_' + id).html((res.memory_stats.usage * 1e-3).toFixed(2) + ' KB');
+						$('#pids_' + id).html(res.pids_stats.current);
+						$('#ntx_' + id).html((res.network.tx_bytes * 1e-3).toFixed(2) + ' KB');
+						$('#nrx_' + id).html((res.network.rx_bytes * 1e-3).toFixed(2) + ' KB');
 					
-					$('#state_' + id).fadeOut(500).fadeIn(500);
+						$('#state_' + id).fadeOut(500).fadeIn(500);
+					} catch (e) {
+						$('#state_' + id).css('color', 'orange').html('stopped').fadeOut(500).fadeIn(500);
+						return;
+					}
 				}
 				setTimeout(function() {
 					request('/containers/' + name + '/stats?stream=false', metric);
@@ -707,7 +712,7 @@
 	</div>
 	<div class="panel panel-success">
 		<div class="panel-heading">
-			<h3 class="panel-title"><strong>Local Containers</strong>
+			<h3 class="panel-title"><strong>Containers Running Locally</strong>
 				<button type="button" class="btn btn-success btn-sm" style="margin-left: 10px" onclick="local_update()" id="local_refresh" disabled="true">Refresh</button>
 			</h3>
 		</div>
