@@ -404,7 +404,7 @@
 				table += '<td><button class="btn btn-sm btn-danger" onclick="service_scale(null, \'' + service.ID + '\')">0 of ' + service.Spec.Mode.Replicated.Replicas + '</button></td>';
 			}
 			
-			var ports = null;
+			var ports = '';
 			if (prevService == service.Spec.Name) {
 				ports = '-';
 			} else if (service.Endpoint.Ports != null) {
